@@ -1,0 +1,98 @@
+{
+  "name": "claude-prompt-suggest",
+  "displayName": "Claude Prompt Suggest",
+  "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
+  "version": "0.1.0",
+  "publisher": "PeterPhuTran",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeSuggest.accept",
+        "title": "Claude Suggest: Copy Suggestion & Focus Chat"
+      },
+      {
+        "command": "claudeSuggest.dismiss",
+        "title": "Claude Suggest: Dismiss Suggestion"
+      },
+      {
+        "command": "claudeSuggest.regenerate",
+        "title": "Claude Suggest: Regenerate Suggestion"
+      },
+      {
+        "command": "claudeSuggest.toggle",
+        "title": "Claude Suggest: Enable/Disable"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Prompt Suggest",
+      "properties": {
+        "claudeSuggest.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Watch Claude Code sessions and suggest a next prompt after each turn."
+        },
+        "claudeSuggest.model": {
+          "type": "string",
+          "default": "haiku",
+          "description": "Model passed to `claude -p --model` for suggestion generation."
+        },
+        "claudeSuggest.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the claude binary. Empty = auto-discover (PATH, then the official extension's bundled binary)."
+        },
+        "claudeSuggest.maxContextMessages": {
+          "type": "number",
+          "default": 8,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "How many recent user/assistant messages to include as context."
+        },
+        "claudeSuggest.debounceMs": {
+          "type": "number",
+          "default": 400,
+          "minimum": 100,
+          "description": "Debounce for transcript file events before processing."
+        },
+        "claudeSuggest.entrypointFilter": {
+          "type": "string",
+          "enum": [
+            "claude-vscode",
+            "all"
+          ],
+          "default": "claude-vscode",
+          "description": "Suggest only for sessions started from the VS Code extension, or for all Claude Code sessions in this project."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "harness": "node esbuild.mjs && node dist/harness.js",
+    "package": "npm run typecheck && npm run build -- --production && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
