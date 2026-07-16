@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,
@@ -36,6 +36,14 @@
         "title": "Claude Suggest: Enable/Disable"
       }
     ],
+    "keybindings": [
+      {
+        "command": "claudeSuggest.accept",
+        "key": "ctrl+alt+.",
+        "mac": "cmd+alt+.",
+        "when": "claudeSuggest.hasSuggestion"
+      }
+    ],
     "configuration": {
       "title": "Claude Prompt Suggest",
       "properties": {
@@ -53,6 +61,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the claude binary. Empty = auto-discover (PATH, then the official extension's bundled binary)."
+        },
+        "claudeSuggest.autoPaste": {
+          "type": "boolean",
+          "default": true,
+          "description": "After copying and focusing the Claude chat input, simulate a native Ctrl+V/Cmd+V keystroke so the suggestion lands in the input automatically (Windows/macOS; Linux needs xdotool). Turn off to just copy + focus."
         },
         "claudeSuggest.maxContextMessages": {
           "type": "number",

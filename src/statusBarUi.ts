@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { simulatePaste } from './autoPaste';
+import { readConfig } from './config';
 import type { Log } from './log';
 
 /** Anything that can own the status bar and be asked to regenerate. */
@@ -54,17 +56,27 @@ export class StatusBar {
     if (this.owner === owner) this.setState({ kind: 'hidden' });
   }
 
-  /** Click / command entry point: behavior depends on current state. */
+  /** Click / keybinding / command entry point: behavior depends on current state. */
   async accept(): Promise<void> {
     const s = this.state;
     if (s.kind === 'suggestion') {
       await vscode.env.clipboard.writeText(s.text);
+      let focused = false;
       try {
         await vscode.commands.executeCommand('claude-vscode.focus');
+        focused = true;
       } catch {
         vscode.window.showInformationMessage('Suggestion copied — open the Claude chat and press Ctrl+V.');
       }
-      this.flashAccepted();
+      // Simulate the paste keystroke only when focus verifiably landed on the
+      // chat input; otherwise we'd paste into whatever is focused.
+      let pasted = false;
+      if (focused && readConfig().autoPaste) {
+        await new Promise((r) => setTimeout(r, 150)); // let the webview take focus
+        pasted = await simulatePaste();
+        if (!pasted) this.log.info('paste simulation unavailable, clipboard-only fallback');
+      }
+      this.flashAccepted(pasted);
     } else if (s.kind === 'error' && s.errorKind === 'binary') {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'claudeSuggest.claudePath');
     } else if (s.kind === 'error' && s.errorKind === 'auth') {
@@ -76,8 +88,8 @@ export class StatusBar {
     this.setState({ kind: 'hidden' });
   }
 
-  private flashAccepted(): void {
-    this.item.text = '$(check) Copied';
+  private flashAccepted(pasted: boolean): void {
+    this.item.text = pasted ? '$(check) Pasted' : '$(check) Copied';
     this.item.tooltip = undefined;
     this.timer = setTimeout(() => this.setState({ kind: 'hidden' }), FLASH_MS);
   }
@@ -88,6 +100,7 @@ export class StatusBar {
       this.timer = undefined;
     }
     this.state = state;
+    void vscode.commands.executeCommand('setContext', 'claudeSuggest.hasSuggestion', state.kind === 'suggestion');
     switch (state.kind) {
       case 'hidden':
         this.item.hide();

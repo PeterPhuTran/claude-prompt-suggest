@@ -5,9 +5,9 @@ The Claude Code **CLI** shows a suggested next prompt between turns; the officia
 1. It watches your Claude Code session transcripts (`~/.claude/projects/<slug>/*.jsonl`) for the open workspace.
 2. When a turn completes (`stop_reason: end_turn`), it generates one suggested next prompt with a cheap headless call — `claude -p --model haiku` — reusing your existing Claude subscription auth. No API key needed.
 3. The suggestion appears in the **status bar**: `💡 Add tests for the parser…`
-4. **Click it** (or run *Claude Suggest: Copy Suggestion & Focus Chat*) → the full text is copied to your clipboard and the Claude chat input is focused. Press `Ctrl+V`, then Enter.
+4. **Press `Ctrl+Alt+.`** (or click the 💡) → the full text is copied, the Claude chat input is focused, and a native `Ctrl+V` keystroke is simulated so the text lands in the input automatically. Just press Enter.
 
-The official extension's chat input can't be typed into programmatically, so clipboard + focus is the closest possible flow to the CLI's Tab-to-accept.
+The official extension's chat input can't be written to through any VS Code API, so the flow is clipboard + focus + a simulated OS-level paste keystroke (WScript SendKeys on Windows, `osascript` on macOS — needs Accessibility permission, `xdotool` on Linux). The keystroke only fires when the focus command succeeded; if simulation isn't available it falls back to clipboard-only and the flash reads `✓ Copied` instead of `✓ Pasted`. Set `claudeSuggest.autoPaste: false` to opt out.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ The official extension's chat input can't be typed into programmatically, so cli
 
 | Command | Effect |
 |---|---|
-| `claudeSuggest.accept` | Copy suggestion + focus Claude chat (also what clicking the status bar does) |
+| `claudeSuggest.accept` | Copy suggestion + focus Claude chat + auto-paste. Bound to `Ctrl+Alt+.` (`Cmd+Alt+.` on macOS) while a suggestion is showing; also what clicking the status bar does |
 | `claudeSuggest.dismiss` | Hide the current suggestion |
 | `claudeSuggest.regenerate` | Regenerate for the last completed turn (also clears auth backoff) |
 | `claudeSuggest.toggle` | Enable/disable the whole extension |
@@ -30,6 +30,7 @@ The official extension's chat input can't be typed into programmatically, so cli
 | `claudeSuggest.enabled` | `true` | Master switch |
 | `claudeSuggest.model` | `haiku` | Model for `claude -p --model` |
 | `claudeSuggest.claudePath` | `""` | Explicit binary path; empty = auto-discover (PATH → bundled) |
+| `claudeSuggest.autoPaste` | `true` | Simulate the paste keystroke after copy+focus; off = copy+focus only |
 | `claudeSuggest.maxContextMessages` | `8` | Recent messages sent as context |
 | `claudeSuggest.debounceMs` | `400` | Debounce for transcript file events |
 | `claudeSuggest.entrypointFilter` | `claude-vscode` | Only suggest for VS Code sessions, or `all` (incl. terminal CLI sessions) |
