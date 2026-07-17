@@ -84,13 +84,21 @@ export class StatusBar {
       // Copied: clear every surface now (status bar → flash, lightbulb via
       // context keys) in all windows, before the paste even runs.
       this.setState({ kind: 'flash', pasted: false });
+      // claude-vscode.focus reveals whichever panel the official extension
+      // tracks, which can yank a *different* conversation's tab forward. If
+      // the suggestion's own tab is already the active tab somewhere (the
+      // lightbulb click case), focus in place instead of revealing anything.
+      const inPlace = this.isSuggestionTabActiveSomewhere(s.title);
       let focused = false;
       try {
-        await vscode.commands.executeCommand('claude-vscode.focus');
+        await vscode.commands.executeCommand(
+          inPlace ? 'workbench.action.focusActiveEditorGroup' : 'claude-vscode.focus',
+        );
         focused = true;
       } catch {
         vscode.window.showInformationMessage('Suggestion copied — open the Claude chat and press Ctrl+V.');
       }
+      this.log.info(`focus via ${inPlace ? 'active editor group (tab already visible)' : 'claude-vscode.focus'}`);
       // Paste only when the OS-foreground window verifiably shows the Claude
       // panel (window title check) — focus moving to a webview in a *different*
       // OS window once let the keystroke land in a source file.
@@ -168,6 +176,22 @@ export class StatusBar {
    * imperfection: with two Claude tabs active in different groups, a
    * same-titled wrong tab could match; title matching keeps that rare.
    */
+  /** Is the suggestion's own conversation the active tab in any tab group? */
+  private isSuggestionTabActiveSomewhere(title: string | undefined): boolean {
+    for (const group of vscode.window.tabGroups.all) {
+      const tab = group.activeTab;
+      if (
+        tab &&
+        tab.input instanceof vscode.TabInputWebview &&
+        /claude/i.test(tab.input.viewType) &&
+        (!title || fuzzyTitleMatch(tab.label, title))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private updateTabContext(): void {
     let active = false;
     if (this.state.kind === 'suggestion') {
