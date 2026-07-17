@@ -72,14 +72,16 @@ export interface ActiveSession {
 }
 
 /**
- * Pick the session to watch for a workspace folder:
- * live sessions matching cwd (+ entrypoint filter) first, newest transcript
- * wins; otherwise the most recently modified .jsonl in the project dir.
+ * Sessions to watch for a workspace folder: every live session matching the
+ * cwd (+ entrypoint filter), newest transcripts first, capped; if none are
+ * live, the most recently modified .jsonl in the project dir as a fallback.
+ * Watching all live sessions keeps one pending suggestion per conversation.
  */
-export async function pickActiveSession(
+export async function pickActiveSessions(
   cwd: string,
   entrypointFilter: 'claude-vscode' | 'all',
-): Promise<ActiveSession | undefined> {
+  maxSessions = 4,
+): Promise<ActiveSession[]> {
   const dir = projectDir(cwd);
 
   const candidates: ActiveSession[] = [];
@@ -106,7 +108,7 @@ export async function pickActiveSession(
   }>;
   if (alive.length > 0) {
     alive.sort((a, b) => b.mtime - a.mtime);
-    return alive[0].s;
+    return alive.slice(0, maxSessions).map((x) => x.s);
   }
 
   // Fallback: newest transcript on disk (entrypoint checked later from lines).
@@ -114,7 +116,7 @@ export async function pickActiveSession(
   try {
     names = await readdir(dir);
   } catch {
-    return undefined;
+    return [];
   }
   let best: { file: string; mtime: number } | undefined;
   for (const name of names) {
@@ -126,9 +128,11 @@ export async function pickActiveSession(
       // file vanished between readdir and stat
     }
   }
-  if (!best) return undefined;
-  return {
-    sessionId: best.file.replace(/\.jsonl$/, ''),
-    jsonlPath: path.join(dir, best.file),
-  };
+  if (!best) return [];
+  return [
+    {
+      sessionId: best.file.replace(/\.jsonl$/, ''),
+      jsonlPath: path.join(dir, best.file),
+    },
+  ];
 }

@@ -2,7 +2,11 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.2.2",
+  "version": "0.3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PeterPhuTran/claude-prompt-suggest.git"
+  },
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,

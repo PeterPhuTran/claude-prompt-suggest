@@ -62,7 +62,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('claudeSuggest.showLog', () => log.show()),
     vscode.commands.registerCommand('claudeSuggest.accept', () => ui.accept()),
     vscode.commands.registerCommand('claudeSuggest.dismiss', () => ui.dismiss()),
-    vscode.commands.registerCommand('claudeSuggest.regenerate', () => ui.owner?.regenerate()),
+    vscode.commands.registerCommand('claudeSuggest.regenerate', () => ui.regenerate()),
     vscode.commands.registerCommand('claudeSuggest.toggle', async () => {
       const enabled = readConfig().enabled;
       await vscode.workspace

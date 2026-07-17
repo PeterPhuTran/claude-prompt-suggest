@@ -5,7 +5,7 @@ import type { SuggestConfig } from './config';
 import type { Log } from './log';
 import type { StatusBar } from './statusBarUi';
 import type { ClaudeBinary, TurnCompleteEvent } from './types';
-import { claudeHome, pickActiveSession, projectDir } from './sessionLocator';
+import { claudeHome, pickActiveSessions, projectDir } from './sessionLocator';
 import { TranscriptTailer } from './transcriptTailer';
 import { TurnDetector } from './turnDetector';
 import { generateSuggestion } from './suggestionEngine';
@@ -21,19 +21,30 @@ export interface ControllerDeps {
   storageDir: string;
 }
 
-/** Watches one workspace folder's Claude project dir and drives suggestions. */
+/** Per-session tail/detect/generate state — one per live conversation. */
+interface SessionWatcher {
+  sessionId: string;
+  jsonlPath: string;
+  tailer: TranscriptTailer;
+  detector: TurnDetector;
+  inflight?: AbortController;
+  generation: number;
+  lastTurn?: TurnCompleteEvent;
+  lastTurnAt?: number;
+}
+
+/**
+ * Watches one workspace folder's Claude project dir and drives suggestions.
+ * Every live session gets its own watcher, so each open conversation keeps
+ * its own pending suggestion independently.
+ */
 export class SuggestController {
   private dirWatcher: fs.FSWatcher | undefined;
   private watchedDir: string | undefined;
   private fallbackTimer: NodeJS.Timeout;
   private debounceTimer: NodeJS.Timeout | undefined;
 
-  private tailer: TranscriptTailer | undefined;
-  private detector: TurnDetector | undefined;
-
-  private generation = 0;
-  private inflight: AbortController | undefined;
-  private lastTurn: TurnCompleteEvent | undefined;
+  private watchers = new Map<string, SessionWatcher>();
   private authBackoffUntil = 0;
 
   private ticking = false;
@@ -115,53 +126,70 @@ export class SuggestController {
     if (!cfg.enabled) return;
     if (this.watchedDir !== projectDir(this.cwd)) this.setupWatcher();
 
-    const session = await pickActiveSession(this.cwd, cfg.entrypointFilter);
-    if (!session) return;
+    const sessions = await pickActiveSessions(this.cwd, cfg.entrypointFilter);
+    if (sessions.length === 0) return;
 
-    if (!this.tailer || this.tailer.filePath !== session.jsonlPath) {
-      this.deps.log.info(`session: ${session.sessionId} (${session.entrypoint ?? 'entrypoint from transcript'})`);
-      this.abortInflight();
-      this.tailer = new TranscriptTailer(session.jsonlPath, {
-        onParseError: (err) => this.deps.log.warn(`transcript parse error: ${err}`),
-      });
-      this.detector = new TurnDetector(session.sessionId, { maxContext: cfg.maxContextMessages });
+    const wanted = new Set(sessions.map((s) => s.sessionId));
+    for (const [id, w] of this.watchers) {
+      if (!wanted.has(id)) {
+        w.inflight?.abort();
+        this.watchers.delete(id);
+        this.deps.ui.clearSession(this, id);
+        this.deps.log.info(`session gone: ${id.slice(0, 8)}`);
+      }
+    }
+
+    for (const s of sessions) {
+      let w = this.watchers.get(s.sessionId);
+      if (!w) {
+        w = {
+          sessionId: s.sessionId,
+          jsonlPath: s.jsonlPath,
+          tailer: new TranscriptTailer(s.jsonlPath, {
+            onParseError: (err) => this.deps.log.warn(`transcript parse error: ${err}`),
+          }),
+          detector: new TurnDetector(s.sessionId, { maxContext: cfg.maxContextMessages }),
+          generation: 0,
+        };
+        this.watchers.set(s.sessionId, w);
+        this.deps.log.info(`session: ${s.sessionId} (${s.entrypoint ?? 'entrypoint from transcript'})`);
+        try {
+          const lines = await w.tailer.bootstrap();
+          w.detector.bootstrap(lines);
+        } catch (err) {
+          this.deps.log.warn(`bootstrap failed for ${s.sessionId.slice(0, 8)}, retrying next event: ${err}`);
+          this.watchers.delete(s.sessionId);
+        }
+        continue; // historical turns never fire; wait for new appends
+      }
+
       let lines;
       try {
-        lines = await this.tailer.bootstrap();
+        lines = await w.tailer.poll();
       } catch (err) {
-        this.deps.log.warn(`bootstrap failed, retrying next event: ${err}`);
-        this.tailer = undefined;
-        return;
+        this.deps.log.warn(`poll failed for ${s.sessionId.slice(0, 8)}: ${err}`);
+        continue;
       }
-      this.detector.bootstrap(lines);
-      return; // historical turns never fire; wait for new appends
-    }
+      if (lines.length === 0) continue;
 
-    let lines;
-    try {
-      lines = await this.tailer.poll();
-    } catch (err) {
-      this.deps.log.warn(`poll failed: ${err}`);
-      return;
-    }
-    if (lines.length === 0) return;
-
-    for (const event of this.detector!.ingest(lines)) {
-      if (event.kind === 'user-message') {
-        this.abortInflight();
-        this.deps.ui.clear(this);
-      } else {
-        void this.startGeneration(event);
+      for (const event of w.detector.ingest(lines)) {
+        if (event.kind === 'user-message') {
+          w.inflight?.abort();
+          w.inflight = undefined;
+          this.deps.ui.clearSession(this, w.sessionId);
+        } else {
+          void this.startGeneration(w, event);
+        }
       }
     }
   }
 
-  private async startGeneration(event: TurnCompleteEvent): Promise<void> {
+  private async startGeneration(w: SessionWatcher, event: TurnCompleteEvent): Promise<void> {
     const cfg = this.deps.config();
     if (
       cfg.entrypointFilter !== 'all' &&
-      this.detector?.entrypoint &&
-      this.detector.entrypoint !== cfg.entrypointFilter
+      w.detector.entrypoint &&
+      w.detector.entrypoint !== cfg.entrypointFilter
     ) {
       return;
     }
@@ -174,67 +202,76 @@ export class SuggestController {
       return;
     }
 
-    this.abortInflight();
+    w.inflight?.abort();
     const ac = new AbortController();
-    this.inflight = ac;
-    const gen = ++this.generation;
-    this.lastTurn = event;
-    this.deps.ui.showBusy(this);
+    w.inflight = ac;
+    const gen = ++w.generation;
+    w.lastTurn = event;
+    w.lastTurnAt = Date.now();
+    this.deps.ui.beginBusy(this);
 
-    const started = Date.now();
-    const attempt = () =>
-      generateSuggestion(event.contextMessages, {
-        binary,
-        model: cfg.model,
-        cwd: this.deps.storageDir,
-        timeoutMs: cfg.timeoutSeconds * 1000,
-        signal: ac.signal,
-      });
-    let result = await attempt();
-    if (!result.ok && result.error === 'timeout' && !this.disposed && gen === this.generation) {
-      // first spawn after a Claude update can be slow (AV scans the new binary)
-      this.deps.log.warn(`timeout after ${cfg.timeoutSeconds}s, retrying once`);
-      result = await attempt();
-    }
-    if (this.disposed || gen !== this.generation) return; // superseded
-    this.inflight = undefined;
+    try {
+      const started = Date.now();
+      const attempt = () =>
+        generateSuggestion(event.contextMessages, {
+          binary,
+          model: cfg.model,
+          cwd: this.deps.storageDir,
+          timeoutMs: cfg.timeoutSeconds * 1000,
+          signal: ac.signal,
+        });
+      let result = await attempt();
+      if (!result.ok && result.error === 'timeout' && !this.disposed && gen === w.generation) {
+        // first spawn after a Claude update can be slow (AV scans the new binary)
+        this.deps.log.warn(`timeout after ${cfg.timeoutSeconds}s, retrying once`);
+        result = await attempt();
+      }
+      if (this.disposed || gen !== w.generation) return; // superseded
+      w.inflight = undefined;
 
-    if (result.ok) {
-      this.deps.log.info(`generated in ${Date.now() - started}ms via ${binary.source}`);
-      this.deps.ui.showSuggestion(this, result.suggestion, this.detector?.title);
-      return;
-    }
-    switch (result.error) {
-      case 'aborted':
-        break;
-      case 'auth':
-        this.authBackoffUntil = Date.now() + AUTH_BACKOFF_MS;
-        this.deps.ui.showError(this, 'auth', 'Claude auth failed — click for details');
-        this.deps.log.warn(`auth error, backing off 10min: ${result.detail}`);
-        break;
-      default:
-        this.deps.ui.showError(this, 'transient', `suggestion ${result.error}`);
-        this.deps.log.warn(`generation ${result.error}: ${result.detail}`);
+      if (result.ok) {
+        this.deps.log.info(
+          `generated in ${Date.now() - started}ms via ${binary.source} for ${w.sessionId.slice(0, 8)}`,
+        );
+        this.deps.ui.showSuggestion(this, w.sessionId, result.suggestion, w.detector.title);
+        return;
+      }
+      switch (result.error) {
+        case 'aborted':
+          break;
+        case 'auth':
+          this.authBackoffUntil = Date.now() + AUTH_BACKOFF_MS;
+          this.deps.ui.showError(this, 'auth', 'Claude auth failed — click for details');
+          this.deps.log.warn(`auth error, backing off 10min: ${result.detail}`);
+          break;
+        default:
+          this.deps.ui.showError(this, 'transient', `suggestion ${result.error}`);
+          this.deps.log.warn(`generation ${result.error}: ${result.detail}`);
+      }
+    } finally {
+      this.deps.ui.endBusy();
     }
   }
 
-  regenerate(): void {
+  regenerate(sessionId?: string): void {
     this.authBackoffUntil = 0;
-    if (this.lastTurn) void this.startGeneration(this.lastTurn);
+    let w = sessionId ? this.watchers.get(sessionId) : undefined;
+    if (!w) {
+      for (const cand of this.watchers.values()) {
+        if (cand.lastTurn && (!w || (cand.lastTurnAt ?? 0) > (w.lastTurnAt ?? 0))) w = cand;
+      }
+    }
+    if (w?.lastTurn) void this.startGeneration(w, w.lastTurn);
   }
 
   onConfigChanged(): void {
     this.scheduleTick();
   }
 
-  private abortInflight(): void {
-    this.inflight?.abort();
-    this.inflight = undefined;
-  }
-
   dispose(): void {
     this.disposed = true;
-    this.abortInflight();
+    for (const w of this.watchers.values()) w.inflight?.abort();
+    this.watchers.clear();
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     clearInterval(this.fallbackTimer);
     this.dirWatcher?.close();
