@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,
@@ -70,6 +70,11 @@
           "type": "boolean",
           "default": false,
           "description": "Also announce each suggestion as a notification toast with a Paste button. Useful when the Claude panel is popped out into a floating window — floating windows have no status bar, but toasts appear in the focused window."
+        },
+        "claudeSuggest.osNotification": {
+          "type": "boolean",
+          "default": false,
+          "description": "Announce each suggestion as an OS-native notification (Windows toast). Unlike VS Code toasts, these appear even when you're working in a popped-out floating window. Informational — accept with Ctrl+Alt+. or the status bar."
         },
         "claudeSuggest.autoPaste": {
           "type": "boolean",

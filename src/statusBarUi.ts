@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { simulatePaste } from './autoPaste';
+import { pasteIntoClaudeWindow, showOsNotification } from './autoPaste';
 import { readConfig } from './config';
 import type { Log } from './log';
 
@@ -41,7 +41,11 @@ export class StatusBar {
   showSuggestion(owner: SuggestionOwner, text: string): void {
     this.owner = owner;
     this.setState({ kind: 'suggestion', text });
-    if (readConfig().showToast) this.toast(text);
+    const cfg = readConfig();
+    if (cfg.showToast) this.toast(text);
+    if (cfg.osNotification) {
+      void showOsNotification('Claude suggestion — Ctrl+Alt+. to use it', text);
+    }
   }
 
   /**
@@ -96,15 +100,21 @@ export class StatusBar {
       } catch {
         vscode.window.showInformationMessage('Suggestion copied — open the Claude chat and press Ctrl+V.');
       }
-      // Simulate the paste keystroke only when focus verifiably landed on the
-      // chat input; otherwise we'd paste into whatever is focused.
-      let pasted = false;
+      // Paste only when the OS-foreground window verifiably shows the Claude
+      // panel (window title check) — focus moving to a webview in a *different*
+      // OS window once let the keystroke land in a source file.
+      let outcome: 'pasted' | 'skipped' | 'failed' = 'skipped';
       if (focused && readConfig().autoPaste) {
         await new Promise((r) => setTimeout(r, 150)); // let the webview take focus
-        pasted = await simulatePaste();
-        if (!pasted) this.log.info('paste simulation unavailable, clipboard-only fallback');
+        outcome = await pasteIntoClaudeWindow();
+        this.log.info(`paste outcome: ${outcome}`);
+        if (outcome !== 'pasted') {
+          vscode.window.showInformationMessage(
+            'Suggestion copied — click the Claude chat input and press Ctrl+V.',
+          );
+        }
       }
-      this.flashAccepted(pasted);
+      this.flashAccepted(outcome === 'pasted');
     } else if (s.kind === 'error' && s.errorKind === 'binary') {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'claudeSuggest.claudePath');
     } else if (s.kind === 'error' && s.errorKind === 'auth') {
