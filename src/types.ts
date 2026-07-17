@@ -17,6 +17,8 @@ export interface TranscriptLine {
   isSidechain?: boolean;
   isMeta?: boolean;
   timestamp?: string;
+  /** conversation title, on type 'ai-title' lines */
+  aiTitle?: string;
   message?: {
     role?: string;
     stop_reason?: string | null;

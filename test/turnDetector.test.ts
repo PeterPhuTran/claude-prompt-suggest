@@ -41,6 +41,16 @@ describe('TurnDetector', () => {
     expect(texts).toContain('All 12 tests pass.');
   });
 
+  it('captures the conversation title from ai-title lines', () => {
+    const d = detector();
+    d.ingest([
+      userLine('hello'),
+      { type: 'ai-title', aiTitle: 'Prompt suggest extension', sessionId: 'sess-1' },
+      assistantLine('hi', 'end_turn'),
+    ]);
+    expect(d.title).toBe('Prompt suggest extension');
+  });
+
   it('fires on stop_sequence turn ends too (seen in SDK/VS Code sessions)', () => {
     const d = detector();
     const events = d.ingest([

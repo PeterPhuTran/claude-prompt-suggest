@@ -20,6 +20,8 @@ export class TurnDetector {
   private context: ContextMsg[] = [];
   /** entrypoint seen on message lines, e.g. "claude-vscode" or "cli" */
   entrypoint: string | undefined;
+  /** conversation title from the latest ai-title line — matches the panel tab label */
+  title: string | undefined;
 
   constructor(
     readonly sessionId: string,
@@ -86,6 +88,10 @@ export class TurnDetector {
   private absorb(line: TranscriptLine): boolean {
     if (!this.isRelevant(line)) return false;
     if (line.entrypoint) this.entrypoint = line.entrypoint;
+    if (line.type === 'ai-title' && typeof line.aiTitle === 'string' && line.aiTitle.trim()) {
+      this.title = line.aiTitle.trim();
+      return false;
+    }
 
     if (line.type !== 'user' && line.type !== 'assistant') return false;
     const text = extractText(line);

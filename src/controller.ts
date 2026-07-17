@@ -201,7 +201,7 @@ export class SuggestController {
 
     if (result.ok) {
       this.deps.log.info(`generated in ${Date.now() - started}ms via ${binary.source}`);
-      this.deps.ui.showSuggestion(this, result.suggestion);
+      this.deps.ui.showSuggestion(this, result.suggestion, this.detector?.title);
       return;
     }
     switch (result.error) {

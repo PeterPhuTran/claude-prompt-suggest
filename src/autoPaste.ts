@@ -124,35 +124,3 @@ export async function pasteIntoClaudeWindow(targetTitles: string[] = []): Promis
   }
 }
 
-const XML_ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&apos;',
-};
-
-function escapeXml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
-}
-
-/**
- * OS-native notification (Windows toast). Unlike VS Code toasts — which only
- * render in the main window — these appear regardless of which window has
- * focus, so they reach users working in a popped-out Claude panel.
- * Informational only: OS toast buttons can't call back into the extension.
- */
-export async function showOsNotification(title: string, body: string): Promise<boolean> {
-  if (process.platform !== 'win32') return false;
-  const script = `
-$null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
-$null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
-$appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe'
-$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-$xml.LoadXml('<toast duration="short"><visual><binding template="ToastGeneric"><text>${escapeXml(title)}</text><text>${escapeXml(body)}</text></binding></visual></toast>')
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show((New-Object Windows.UI.Notifications.ToastNotification $xml))
-Write-Output 'ok'
-`;
-  const out = await runPowerShellScript(script, 8_000);
-  return out === 'ok';
-}

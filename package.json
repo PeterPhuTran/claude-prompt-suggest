@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,
@@ -45,7 +45,7 @@
       "editor/title": [
         {
           "command": "claudeSuggest.accept",
-          "when": "activeWebviewPanelId == claudeVSCodePanel && claudeSuggest.hasSuggestion",
+          "when": "activeWebviewPanelId == claudeVSCodePanel && claudeSuggest.suggestionTabActive",
           "group": "navigation@1"
         }
       ]
@@ -79,12 +79,7 @@
         "claudeSuggest.showToast": {
           "type": "boolean",
           "default": false,
-          "description": "Also announce each suggestion as a notification toast with a Paste button. Useful when the Claude panel is popped out into a floating window — floating windows have no status bar, but toasts appear in the focused window."
-        },
-        "claudeSuggest.osNotification": {
-          "type": "boolean",
-          "default": false,
-          "description": "Announce each suggestion as an OS-native notification (Windows toast). Unlike VS Code toasts, these appear even when you're working in a popped-out floating window. Informational — accept with Ctrl+Alt+. or the status bar."
+          "description": "Mirror errors (timeout, auth, missing binary) as warning toasts with a Retry button. Suggestions themselves never toast — the tab-bar lightbulb and status bar announce them and clear on use."
         },
         "claudeSuggest.autoPaste": {
           "type": "boolean",
