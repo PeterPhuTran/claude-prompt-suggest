@@ -4,14 +4,20 @@ export type PasteOutcome = 'pasted' | 'skipped' | 'failed';
 
 /**
  * Windows: verify at the OS level that the Claude panel's window is the
- * foreground window before sending the paste keystroke. The window title
- * reflects the active tab, so 'Claude' in the foreground title means the chat
- * panel is focused (main window with the Claude tab active, or the popped-out
- * panel window). If another window is foreground, try to activate a
- * Claude-titled window first; if none exists, do NOT paste — a blind Ctrl+V
- * lands in whatever editor is focused (it once pasted into a source file).
+ * foreground window before sending the paste keystroke. Window titles
+ * reflect the active tab, and the Claude panel's tab is titled with the
+ * conversation name — so the caller passes the actual tab labels (from
+ * vscode.window.tabGroups) and we match/activate against those, falling back
+ * to 'Claude'. If no target window can be verified, do NOT paste — a blind
+ * Ctrl+V lands in whatever editor is focused (it once pasted into a source
+ * file).
  */
-const WIN_PASTE_SCRIPT = `
+function buildWinPasteScript(targetTitles: string[]): string {
+  const targets = [...targetTitles, 'Claude']
+    .filter((t) => t.trim().length >= 3)
+    .map((t) => `'${t.slice(0, 120).replace(/'/g, "''")}'`)
+    .join(',');
+  return `
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -25,19 +31,25 @@ $sb = New-Object System.Text.StringBuilder 512
 [void][FG]::GetWindowText([FG]::GetForegroundWindow(), $sb, 512)
 $title = $sb.ToString()
 $sh = New-Object -ComObject WScript.Shell
-if ($title -match 'Claude') {
-  $sh.SendKeys('^v')
-  Write-Output 'pasted'
-  exit 0
+$targets = @(${targets})
+foreach ($t in $targets) {
+  if ($title.IndexOf($t, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+    $sh.SendKeys('^v')
+    Write-Output 'pasted'
+    exit 0
+  }
 }
-if ($sh.AppActivate('Claude')) {
-  Start-Sleep -Milliseconds 250
-  $sh.SendKeys('^v')
-  Write-Output 'pasted'
-  exit 0
+foreach ($t in $targets) {
+  if ($sh.AppActivate($t)) {
+    Start-Sleep -Milliseconds 250
+    $sh.SendKeys('^v')
+    Write-Output 'pasted'
+    exit 0
+  }
 }
 Write-Output 'skipped'
 `;
+}
 
 function runPowerShellScript(script: string, timeoutMs = 5_000): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -86,11 +98,13 @@ function runSimple(command: string, args: string[], timeoutMs = 3_000): Promise<
 /**
  * Send a paste keystroke to the Claude chat input, verifying the target
  * window first where the platform allows it. Never pastes blind on Windows.
+ * `targetTitles`: the Claude panel's actual tab labels, used to recognize or
+ * activate the window that hosts it.
  */
-export async function pasteIntoClaudeWindow(): Promise<PasteOutcome> {
+export async function pasteIntoClaudeWindow(targetTitles: string[] = []): Promise<PasteOutcome> {
   switch (process.platform) {
     case 'win32': {
-      const out = await runPowerShellScript(WIN_PASTE_SCRIPT);
+      const out = await runPowerShellScript(buildWinPasteScript(targetTitles));
       if (out === 'pasted') return 'pasted';
       if (out === 'skipped') return 'skipped';
       return 'failed';

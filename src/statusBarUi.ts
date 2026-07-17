@@ -106,8 +106,9 @@ export class StatusBar {
       let outcome: 'pasted' | 'skipped' | 'failed' = 'skipped';
       if (focused && readConfig().autoPaste) {
         await new Promise((r) => setTimeout(r, 150)); // let the webview take focus
-        outcome = await pasteIntoClaudeWindow();
-        this.log.info(`paste outcome: ${outcome}`);
+        const labels = claudePanelTabLabels();
+        outcome = await pasteIntoClaudeWindow(labels);
+        this.log.info(`paste outcome: ${outcome} (targets: ${labels.join(' | ') || 'none'})`);
         if (outcome !== 'pasted') {
           vscode.window.showInformationMessage(
             'Suggestion copied — click the Claude chat input and press Ctrl+V.',
@@ -175,4 +176,21 @@ export class StatusBar {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
+/**
+ * Tab labels of open Claude Code webview panels (the tab API sees floating
+ * windows too). The label is the conversation title, which is also the
+ * hosting window's title — what the paste keystroke needs to find its target.
+ */
+function claudePanelTabLabels(): string[] {
+  const labels: string[] = [];
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (tab.input instanceof vscode.TabInputWebview && /claude/i.test(tab.input.viewType)) {
+        labels.push(tab.label);
+      }
+    }
+  }
+  return labels;
 }
