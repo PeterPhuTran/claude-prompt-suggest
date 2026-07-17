@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,

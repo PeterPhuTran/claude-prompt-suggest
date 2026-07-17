@@ -172,18 +172,19 @@ export class StatusBar {
     let active = false;
     if (this.state.kind === 'suggestion') {
       const title = this.state.title;
+      const activeClaudeLabels: string[] = [];
       for (const group of vscode.window.tabGroups.all) {
         const tab = group.activeTab;
-        if (
-          tab &&
-          tab.input instanceof vscode.TabInputWebview &&
-          /claude/i.test(tab.input.viewType) &&
-          (!title || fuzzyTitleMatch(tab.label, title))
-        ) {
-          active = true;
-          break;
+        if (tab && tab.input instanceof vscode.TabInputWebview && /claude/i.test(tab.input.viewType)) {
+          activeClaudeLabels.push(tab.label);
+          if (!title || fuzzyTitleMatch(tab.label, title)) active = true;
         }
       }
+      this.log.info(
+        `lightbulb ${active ? 'shown' : 'hidden'} (title: ${title ?? 'none'}; active claude tabs: ${
+          activeClaudeLabels.join(' | ') || 'none'
+        })`,
+      );
     }
     void vscode.commands.executeCommand('setContext', 'claudeSuggest.suggestionTabActive', active);
   }
@@ -199,11 +200,26 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
 }
 
-/** Tab label ↔ conversation title, tolerant of decorations and truncation. */
+/** Strip dirty-markers and truncation ellipses VS Code adds to tab labels. */
+function normalizeLabel(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/^[●○◐]\s*/, '')
+    .replace(/(\.{3}|…)$/, '')
+    .trim();
+}
+
+/**
+ * Tab label ↔ conversation title, tolerant of decorations and truncation
+ * (a popped-out tab can render as "Enable suggested prompts…" while the
+ * title is "Enable suggested prompts in VS Code extension").
+ */
 function fuzzyTitleMatch(label: string, title: string): boolean {
-  const a = label.trim().toLowerCase();
-  const b = title.trim().toLowerCase();
-  return a.length > 0 && b.length > 0 && (a.includes(b) || b.includes(a));
+  const a = normalizeLabel(label);
+  const b = normalizeLabel(title);
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a) || b.startsWith(a) || a.startsWith(b);
 }
 
 /**
