@@ -41,6 +41,23 @@ export class StatusBar {
   showSuggestion(owner: SuggestionOwner, text: string): void {
     this.owner = owner;
     this.setState({ kind: 'suggestion', text });
+    if (readConfig().showToast) this.toast(text);
+  }
+
+  /**
+   * Floating (popped-out) windows have no status bar, so optionally announce
+   * the suggestion as a toast too — VS Code shows toasts in the focused
+   * window. Toast buttons act on the *current* suggestion; a stale toast that
+   * outlived its suggestion pastes the newest one, which is what you'd want.
+   */
+  private toast(text: string): void {
+    void vscode.window
+      .showInformationMessage(`💡 ${text}`, 'Paste', 'Dismiss')
+      .then((choice) => {
+        if (choice === 'Paste') return this.accept();
+        if (choice === 'Dismiss') this.dismiss();
+        return undefined;
+      });
   }
 
   showError(owner: SuggestionOwner, errorKind: 'binary' | 'auth' | 'transient', message: string): void {
