@@ -6,6 +6,7 @@ export interface SuggestConfig {
   claudePath: string;
   autoPaste: boolean;
   showToast: boolean;
+  timeoutSeconds: number;
   maxContextMessages: number;
   debounceMs: number;
   entrypointFilter: 'claude-vscode' | 'all';
@@ -19,6 +20,7 @@ export function readConfig(): SuggestConfig {
     claudePath: c.get<string>('claudePath', ''),
     autoPaste: c.get<boolean>('autoPaste', true),
     showToast: c.get<boolean>('showToast', false),
+    timeoutSeconds: Math.min(300, Math.max(10, c.get<number>('timeoutSeconds', 60))),
     maxContextMessages: c.get<number>('maxContextMessages', 8),
     debounceMs: Math.max(100, c.get<number>('debounceMs', 400)),
     entrypointFilter: c.get<'claude-vscode' | 'all'>('entrypointFilter', 'claude-vscode'),

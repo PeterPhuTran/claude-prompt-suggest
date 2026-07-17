@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,
@@ -82,6 +82,13 @@
           "minimum": 2,
           "maximum": 20,
           "description": "How many recent user/assistant messages to include as context."
+        },
+        "claudeSuggest.timeoutSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 10,
+          "maximum": 300,
+          "description": "How long to wait for suggestion generation before giving up. First runs after a Claude update can be slow (antivirus scans the new binary); one automatic retry follows a timeout."
         },
         "claudeSuggest.debounceMs": {
           "type": "number",

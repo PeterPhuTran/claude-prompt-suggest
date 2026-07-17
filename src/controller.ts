@@ -182,12 +182,20 @@ export class SuggestController {
     this.deps.ui.showBusy(this);
 
     const started = Date.now();
-    const result = await generateSuggestion(event.contextMessages, {
-      binary,
-      model: cfg.model,
-      cwd: this.deps.storageDir,
-      signal: ac.signal,
-    });
+    const attempt = () =>
+      generateSuggestion(event.contextMessages, {
+        binary,
+        model: cfg.model,
+        cwd: this.deps.storageDir,
+        timeoutMs: cfg.timeoutSeconds * 1000,
+        signal: ac.signal,
+      });
+    let result = await attempt();
+    if (!result.ok && result.error === 'timeout' && !this.disposed && gen === this.generation) {
+      // first spawn after a Claude update can be slow (AV scans the new binary)
+      this.deps.log.warn(`timeout after ${cfg.timeoutSeconds}s, retrying once`);
+      result = await attempt();
+    }
     if (this.disposed || gen !== this.generation) return; // superseded
     this.inflight = undefined;
 

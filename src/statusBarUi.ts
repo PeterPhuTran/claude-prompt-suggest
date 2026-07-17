@@ -66,6 +66,17 @@ export class StatusBar {
     if (errorKind === 'transient') {
       this.timer = setTimeout(() => this.setState({ kind: 'hidden' }), TRANSIENT_ERROR_HIDE_MS);
     }
+    // The status bar doesn't exist in popped-out windows; mirror errors as a
+    // toast there too when the user opted into toasts.
+    if (readConfig().showToast) {
+      const action = errorKind === 'binary' ? 'Open Settings' : 'Retry';
+      void vscode.window.showWarningMessage(`Claude Suggest: ${message}`, action).then((choice) => {
+        if (choice === 'Retry') this.owner?.regenerate();
+        else if (choice === 'Open Settings') {
+          void vscode.commands.executeCommand('workbench.action.openSettings', 'claudeSuggest.claudePath');
+        }
+      });
+    }
   }
 
   /** Clear the bar, but only at the request of its current owner. */
