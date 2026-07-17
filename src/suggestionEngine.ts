@@ -8,6 +8,8 @@ export const SUGGESTION_SYSTEM_PROMPT = [
   '- written in first person, as if the user typed it ("Add tests for the parser")',
   '- imperative, specific, and directly useful given what just happened',
   '- a natural next step: verify, test, commit, fix a loose end, or extend the work',
+  '- a task the ASSISTANT can perform in the session (edit code, run commands, commit)',
+  '- never manual steps for the human to do outside the chat (no "reload the window", "click X", "open settings")',
   '- at most 120 characters, single line, no quotes, no explanation, no numbering',
   'If the assistant asked the user a question, suggest a plausible concrete answer.',
   'Never suggest something already done in the conversation.',
