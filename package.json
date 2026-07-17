@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,
@@ -21,7 +21,8 @@
     "commands": [
       {
         "command": "claudeSuggest.accept",
-        "title": "Claude Suggest: Copy Suggestion & Focus Chat"
+        "title": "Claude Suggest: Copy Suggestion & Focus Chat",
+        "icon": "$(lightbulb)"
       },
       {
         "command": "claudeSuggest.dismiss",
@@ -40,6 +41,15 @@
         "title": "Claude Suggest: Show Log"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "claudeSuggest.accept",
+          "when": "activeWebviewPanelId == claudeVSCodePanel && claudeSuggest.hasSuggestion",
+          "group": "navigation@1"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "claudeSuggest.accept",
