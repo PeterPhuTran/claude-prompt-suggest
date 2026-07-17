@@ -5,11 +5,14 @@ export interface DetectorOptions {
   maxCharsPerMsg?: number;
 }
 
+/** Turn-ending stop_reasons: "tool_use" means mid-flight, these mean done. */
+const TURN_END_STOP_REASONS = new Set(['end_turn', 'stop_sequence']);
+
 /**
  * Consumes parsed transcript lines and decides when a turn has completed.
- * Fires `turn-complete` exactly once per new assistant end_turn line, and
+ * Fires `turn-complete` exactly once per new turn-ending assistant line, and
  * `user-message` whenever a real (human, non-tool-result) prompt appears.
- * A user message that lands in the same batch after an end_turn suppresses
+ * A user message that lands in the same batch after a turn end suppresses
  * the turn-complete (the user has already moved on).
  */
 export class TurnDetector {
@@ -28,7 +31,7 @@ export class TurnDetector {
     for (const line of lines) this.absorb(line);
     for (let i = lines.length - 1; i >= 0; i--) {
       const l = lines[i];
-      if (this.isRelevant(l) && l.type === 'assistant' && l.message?.stop_reason === 'end_turn' && l.uuid) {
+      if (this.isRelevant(l) && this.isTurnEnd(l) && l.uuid) {
         this.lastFiredUuid = l.uuid;
         break;
       }
@@ -52,8 +55,7 @@ export class TurnDetector {
         events.push({ kind: 'user-message', sessionId: this.sessionId });
       } else if (
         this.isRelevant(line) &&
-        line.type === 'assistant' &&
-        line.message?.stop_reason === 'end_turn' &&
+        this.isTurnEnd(line) &&
         line.uuid &&
         line.uuid !== this.lastFiredUuid
       ) {
@@ -95,6 +97,14 @@ export class TurnDetector {
 
   private isRelevant(line: TranscriptLine): boolean {
     return line.isSidechain !== true && line.isMeta !== true;
+  }
+
+  private isTurnEnd(line: TranscriptLine): boolean {
+    return (
+      line.type === 'assistant' &&
+      typeof line.message?.stop_reason === 'string' &&
+      TURN_END_STOP_REASONS.has(line.message.stop_reason)
+    );
   }
 
   private pushContext(role: 'user' | 'assistant', text: string) {

@@ -2,7 +2,7 @@
   "name": "claude-prompt-suggest",
   "displayName": "Claude Prompt Suggest",
   "description": "Suggested next prompt for Claude Code sessions, shown in the status bar. Companion to the official Claude Code extension.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "PeterPhuTran",
   "license": "MIT",
   "private": true,
@@ -34,6 +34,10 @@
       {
         "command": "claudeSuggest.toggle",
         "title": "Claude Suggest: Enable/Disable"
+      },
+      {
+        "command": "claudeSuggest.showLog",
+        "title": "Claude Suggest: Show Log"
       }
     ],
     "keybindings": [

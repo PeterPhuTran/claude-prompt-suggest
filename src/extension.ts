@@ -59,6 +59,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!readConfig().enabled) ui.dismiss();
       for (const ctrl of controllers.values()) ctrl.onConfigChanged();
     }),
+    vscode.commands.registerCommand('claudeSuggest.showLog', () => log.show()),
     vscode.commands.registerCommand('claudeSuggest.accept', () => ui.accept()),
     vscode.commands.registerCommand('claudeSuggest.dismiss', () => ui.dismiss()),
     vscode.commands.registerCommand('claudeSuggest.regenerate', () => ui.owner?.regenerate()),

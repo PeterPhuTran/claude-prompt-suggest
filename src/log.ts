@@ -11,6 +11,10 @@ export class Log {
     this.channel.appendLine(`[${new Date().toISOString()}] WARN ${msg}`);
   }
 
+  show(): void {
+    this.channel.show(true);
+  }
+
   dispose(): void {
     this.channel.dispose();
   }

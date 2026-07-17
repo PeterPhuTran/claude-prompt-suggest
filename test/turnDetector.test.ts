@@ -41,6 +41,15 @@ describe('TurnDetector', () => {
     expect(texts).toContain('All 12 tests pass.');
   });
 
+  it('fires on stop_sequence turn ends too (seen in SDK/VS Code sessions)', () => {
+    const d = detector();
+    const events = d.ingest([
+      userLine('summarize the diff'),
+      assistantLine('Here is the summary.', 'stop_sequence'),
+    ]);
+    expect(events.filter((e) => e.kind === 'turn-complete')).toHaveLength(1);
+  });
+
   it('never fires twice for the same end_turn uuid', () => {
     const d = detector();
     const line = assistantLine('done', 'end_turn');

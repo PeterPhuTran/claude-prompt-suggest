@@ -42,7 +42,7 @@ export function toolResultLine(extra: Partial<TranscriptLine> = {}): TranscriptL
 
 export function assistantLine(
   text: string,
-  stopReason: 'end_turn' | 'tool_use' | null,
+  stopReason: 'end_turn' | 'stop_sequence' | 'tool_use' | null,
   extra: Partial<TranscriptLine> = {},
 ): TranscriptLine {
   const content: Array<{ type: string; text?: string }> = [{ type: 'text', text }];
