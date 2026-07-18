@@ -41,7 +41,7 @@ code --install-extension claude-prompt-suggest-<version>.vsix
    - a **💡 button in that conversation's tab title bar** — including popped-out floating windows. The lightbulb is per-conversation: it only shows on the tab it belongs to, follows you when you switch tabs, and each open conversation keeps its own pending suggestion independently;
    - the **status bar** (bottom right of the main window): `💡 Add tests for the parser…` — hover for the full text of every pending suggestion.
 3. Accept with **`Ctrl+Alt+.`** (`Cmd+Alt+.` on macOS) or by **clicking either 💡**. The text is copied, the chat input focused, and a paste keystroke lands it in the input box. You review it, then press Enter to send — nothing is ever sent automatically.
-4. All indicators for that conversation clear the moment the text is copied; other conversations' suggestions stay pending. Typing your own prompt instead also clears that conversation's suggestion.
+4. Accepting doesn't consume the suggestion — the 💡 stays lit so you can paste, evaluate, delete, and re-accept it. A conversation's suggestion clears when you actually **send** a message in it (yours or the accepted one), when you dismiss it, or when a newer suggestion replaces it. Other conversations' suggestions are always independent.
 
 If the paste can't verify a safe target (see Security), it copies to the clipboard only — the status bar flashes `✓ Copied` instead of `✓ Pasted` and a toast tells you to press `Ctrl+V` yourself.
 

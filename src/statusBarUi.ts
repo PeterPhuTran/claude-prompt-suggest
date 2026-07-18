@@ -114,8 +114,10 @@ export class StatusBar {
     if (!target) return;
 
     await vscode.env.clipboard.writeText(target.text);
-    // Copied: clear THIS conversation's indicators now; other tabs' persist.
-    this.suggestions.delete(target.sessionId);
+    // Accepting does NOT consume the suggestion: the bulb persists so the
+    // user can paste, evaluate, delete, and re-accept. It clears when they
+    // actually send a message in that conversation (user-message event),
+    // dismiss it, or a newer suggestion replaces it.
     this.setTransient({ kind: 'flash', pasted: false }, FLASH_MS);
 
     // claude-vscode.focus reveals whichever panel the official extension
