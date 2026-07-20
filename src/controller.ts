@@ -6,7 +6,7 @@ import type { Log } from './log';
 import type { StatusBar } from './statusBarUi';
 import type { ClaudeBinary, TurnCompleteEvent } from './types';
 import { claudeHome, pickActiveSessions, projectDir } from './sessionLocator';
-import { TranscriptTailer } from './transcriptTailer';
+import { TranscriptTailer, readHeadLines } from './transcriptTailer';
 import { TurnDetector } from './turnDetector';
 import { generateSuggestion } from './suggestionEngine';
 
@@ -16,6 +16,8 @@ const AUTH_BACKOFF_MS = 10 * 60_000;
 export interface ControllerDeps {
   config: () => SuggestConfig;
   getBinary: () => Promise<ClaudeBinary | undefined>;
+  /** drop the cached binary path (it moves when the official extension updates) */
+  invalidateBinary: () => void;
   ui: StatusBar;
   log: Log;
   storageDir: string;
@@ -156,6 +158,19 @@ export class SuggestController {
         try {
           const lines = await w.tailer.bootstrap();
           w.detector.bootstrap(lines);
+          // Long sessions keep their single ai-title line near the head of
+          // the transcript, outside the tail bootstrap window — backfill it
+          // so the per-tab lightbulb can match this conversation's tab.
+          if (!w.detector.title) {
+            for (const line of await readHeadLines(s.jsonlPath)) {
+              if (line.type === 'ai-title' && typeof line.aiTitle === 'string' && line.aiTitle.trim()) {
+                w.detector.title = line.aiTitle.trim();
+              }
+            }
+            if (w.detector.title) {
+              this.deps.log.info(`title backfilled from head for ${s.sessionId.slice(0, 8)}: ${w.detector.title}`);
+            }
+          }
         } catch (err) {
           this.deps.log.warn(`bootstrap failed for ${s.sessionId.slice(0, 8)}, retrying next event: ${err}`);
           this.watchers.delete(s.sessionId);
@@ -245,6 +260,11 @@ export class SuggestController {
           this.deps.log.warn(`auth error, backing off 10min: ${result.detail}`);
           break;
         default:
+          if (result.error === 'spawn') {
+            // the bundled binary path changes when the official extension
+            // auto-updates; re-discover on the next turn
+            this.deps.invalidateBinary();
+          }
           this.deps.ui.showError(this, 'transient', `suggestion ${result.error}`);
           this.deps.log.warn(`generation ${result.error}: ${result.detail}`);
       }

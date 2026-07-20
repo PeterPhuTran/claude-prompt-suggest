@@ -122,6 +122,40 @@ export class TranscriptTailer {
   }
 }
 
+/**
+ * Parse the first complete lines of a transcript (up to maxBytes from the
+ * head). Long sessions keep their one ai-title line near the top, outside the
+ * tail bootstrap window — this recovers it cheaply.
+ */
+export async function readHeadLines(filePath: string, maxBytes = 256 * 1024): Promise<TranscriptLine[]> {
+  const fh = await open(filePath, 'r');
+  try {
+    const size = (await fh.stat()).size;
+    const len = Math.min(size, maxBytes);
+    const buf = Buffer.allocUnsafe(len);
+    let done = 0;
+    while (done < len) {
+      const { bytesRead } = await fh.read(buf, done, len - done, done);
+      if (bytesRead === 0) break;
+      done += bytesRead;
+    }
+    const { lines } = splitCompleteLines(buf.subarray(0, done));
+    const out: TranscriptLine[] = [];
+    for (const raw of lines) {
+      if (raw.length === 0) continue;
+      try {
+        const obj = JSON.parse(raw.toString('utf8'));
+        if (obj && typeof obj === 'object' && typeof obj.type === 'string') out.push(obj);
+      } catch {
+        // partial or corrupt line in the head window — skip
+      }
+    }
+    return out;
+  } finally {
+    await fh.close();
+  }
+}
+
 function splitCompleteLines(data: Buffer): { lines: Buffer[]; remainder: Buffer } {
   const lines: Buffer[] = [];
   let start = 0;

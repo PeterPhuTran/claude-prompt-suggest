@@ -174,13 +174,21 @@ export class StatusBar {
     else this.owner?.regenerate();
   }
 
-  /** The active Claude tab's suggestion if it has one, else the newest. */
+  /**
+   * The suggestion to act on. On a Claude tab: the newest suggestion that
+   * matches that conversation — and if none match a *specifically-titled*
+   * tab, act on nothing rather than paste another conversation's suggestion
+   * into it. Anywhere else (file focused, status bar click): newest overall.
+   */
   private resolveTarget(): Suggestion | undefined {
     const tab = vscode.window.tabGroups.activeTabGroup?.activeTab;
-    if (tab && tab.input instanceof vscode.TabInputWebview && /claude/i.test(tab.input.viewType)) {
-      for (const s of this.suggestions.values()) {
-        if (s.title && fuzzyTitleMatch(tab.label, s.title)) return s;
-      }
+    const onClaudeTab =
+      tab && tab.input instanceof vscode.TabInputWebview && /claude/i.test(tab.input.viewType);
+    if (onClaudeTab) {
+      const matches = [...this.suggestions.values()]
+        .filter((s) => tabMatchesSuggestion(tab.label, s.title))
+        .sort((a, b) => b.at - a.at);
+      return matches[0]; // undefined on a mismatched conversation — by design
     }
     let newest: Suggestion | undefined;
     for (const s of this.suggestions.values()) {
@@ -197,7 +205,7 @@ export class StatusBar {
         tab &&
         tab.input instanceof vscode.TabInputWebview &&
         /claude/i.test(tab.input.viewType) &&
-        (!title || fuzzyTitleMatch(tab.label, title))
+        tabMatchesSuggestion(tab.label, title)
       ) {
         return true;
       }
@@ -279,6 +287,8 @@ export class StatusBar {
    * only render on each group's *active* tab — so the key is true while any
    * group's active tab is a conversation with a pending suggestion.
    */
+  private lastTabContextLog = '';
+
   private updateTabContext(): void {
     let active = false;
     const activeClaudeLabels: string[] = [];
@@ -288,18 +298,20 @@ export class StatusBar {
         if (tab && tab.input instanceof vscode.TabInputWebview && /claude/i.test(tab.input.viewType)) {
           activeClaudeLabels.push(tab.label);
           for (const s of this.suggestions.values()) {
-            if (!s.title || fuzzyTitleMatch(tab.label, s.title)) {
+            if (tabMatchesSuggestion(tab.label, s.title)) {
               active = true;
               break;
             }
           }
         }
       }
-      this.log.info(
-        `lightbulb ${active ? 'shown' : 'hidden'} (${this.suggestions.size} pending; active claude tabs: ${
-          activeClaudeLabels.join(' | ') || 'none'
-        })`,
-      );
+      const line = `lightbulb ${active ? 'shown' : 'hidden'} (${this.suggestions.size} pending; active claude tabs: ${
+        activeClaudeLabels.join(' | ') || 'none'
+      })`;
+      if (line !== this.lastTabContextLog) {
+        this.lastTabContextLog = line;
+        this.log.info(line);
+      }
     }
     void vscode.commands.executeCommand('setContext', 'claudeSuggest.suggestionTabActive', active);
   }
@@ -323,6 +335,25 @@ function normalizeLabel(s: string): string {
     .replace(/^[●○◐]\s*/, '')
     .replace(/(\.{3}|…)$/, '')
     .trim();
+}
+
+/**
+ * Generic panel labels the official extension uses before/instead of a
+ * conversation title ("Claude Code" on primary-editor panels, "New
+ * Conversation" on untitled ones). They carry no conversation identity, so
+ * they must match ANY suggestion — a specifically-titled matcher would hide
+ * the lightbulb on these tabs forever.
+ */
+function labelIsGeneric(label: string): boolean {
+  const n = normalizeLabel(label);
+  return n === 'claude code' || n === 'claude' || n === 'new conversation';
+}
+
+/** Does a tab label plausibly host the conversation a suggestion belongs to? */
+function tabMatchesSuggestion(label: string, title: string | undefined): boolean {
+  if (labelIsGeneric(label)) return true;
+  if (!title) return true; // untitled session — can't disprove a match
+  return fuzzyTitleMatch(label, title);
 }
 
 /**

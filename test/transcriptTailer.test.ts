@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TranscriptTailer } from '../src/transcriptTailer';
+import { TranscriptTailer, readHeadLines } from '../src/transcriptTailer';
 import { assistantLine, toJsonl, userLine } from './helpers';
 
 describe('TranscriptTailer', () => {
@@ -108,5 +108,20 @@ describe('TranscriptTailer', () => {
     await tailer.bootstrap();
     expect(await tailer.poll()).toHaveLength(0);
     expect(await tailer.poll()).toHaveLength(0);
+  });
+
+  it('readHeadLines recovers the early ai-title of a long transcript', async () => {
+    const head = [
+      userLine('first prompt'),
+      { type: 'ai-title', aiTitle: 'My long session', sessionId: 'sess-1' },
+    ];
+    const filler = Array.from({ length: 500 }, (_, i) => userLine(`later ${i} ${'y'.repeat(400)}`));
+    await writeFile(file, toJsonl([...head, ...filler]));
+
+    const lines = await readHeadLines(file, 8 * 1024);
+    const title = lines.find((l) => l.type === 'ai-title');
+    expect(title?.aiTitle).toBe('My long session');
+    // head window must not have read the whole file
+    expect(lines.length).toBeLessThan(500);
   });
 });

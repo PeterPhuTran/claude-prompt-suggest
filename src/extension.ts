@@ -31,7 +31,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   const controllers = new Map<string, SuggestController>();
-  const deps = { config: readConfig, getBinary, ui, log, storageDir };
+  const deps = {
+    config: readConfig,
+    getBinary,
+    invalidateBinary: () => {
+      binaryPromise = undefined;
+    },
+    ui,
+    log,
+    storageDir,
+  };
 
   const syncControllers = () => {
     const folders = vscode.workspace.workspaceFolders ?? [];

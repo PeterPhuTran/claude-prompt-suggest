@@ -80,7 +80,7 @@ export interface ActiveSession {
 export async function pickActiveSessions(
   cwd: string,
   entrypointFilter: 'claude-vscode' | 'all',
-  maxSessions = 4,
+  maxSessions = 8,
 ): Promise<ActiveSession[]> {
   const dir = projectDir(cwd);
 
