@@ -4,13 +4,15 @@ import { discoverClaudeBinary } from './claudeBinary';
 import { readConfig } from './config';
 import { SuggestController } from './controller';
 import { Log } from './log';
+import { SettingsPanel } from './settingsPanel';
 import { StatusBar } from './statusBarUi';
 import type { ClaudeBinary } from './types';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const log = new Log();
   const ui = new StatusBar(log);
-  context.subscriptions.push(log, ui);
+  const settingsPanel = new SettingsPanel(context);
+  context.subscriptions.push(log, ui, settingsPanel);
 
   const storageDir = context.globalStorageUri.fsPath;
   await mkdir(storageDir, { recursive: true });
@@ -69,6 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       for (const ctrl of controllers.values()) ctrl.onConfigChanged();
     }),
     vscode.commands.registerCommand('claudeSuggest.showLog', () => log.show()),
+    vscode.commands.registerCommand('claudeSuggest.openSettings', () => settingsPanel.open()),
     vscode.commands.registerCommand('claudeSuggest.accept', () => ui.accept()),
     vscode.commands.registerCommand('claudeSuggest.dismiss', () => ui.dismiss()),
     vscode.commands.registerCommand('claudeSuggest.regenerate', () => ui.regenerate()),
