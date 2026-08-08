@@ -6,7 +6,7 @@ import type { Log } from './log';
 import type { StatusBar } from './statusBarUi';
 import type { ClaudeBinary, TurnCompleteEvent } from './types';
 import { claudeHome, pickActiveSessions, projectDir } from './sessionLocator';
-import { TranscriptTailer, readHeadLines } from './transcriptTailer';
+import { TranscriptTailer, findLastAiTitle, readHeadLines } from './transcriptTailer';
 import { TurnDetector } from './turnDetector';
 import { generateSuggestion } from './suggestionEngine';
 
@@ -33,6 +33,8 @@ interface SessionWatcher {
   generation: number;
   lastTurn?: TurnCompleteEvent;
   lastTurnAt?: number;
+  /** last title pushed to the UI, to propagate live renames exactly once */
+  publishedTitle?: string;
 }
 
 /**
@@ -158,19 +160,24 @@ export class SuggestController {
         try {
           const lines = await w.tailer.bootstrap();
           w.detector.bootstrap(lines);
-          // Long sessions keep their single ai-title line near the head of
-          // the transcript, outside the tail bootstrap window — backfill it
-          // so the per-tab lightbulb can match this conversation's tab.
+          // Conversations get re-titled as they evolve and the tab label
+          // follows the NEWEST ai-title. If the tail bootstrap window held
+          // none, scan backwards for the latest (head fallback for very old
+          // never-renamed sessions).
           if (!w.detector.title) {
-            for (const line of await readHeadLines(s.jsonlPath)) {
-              if (line.type === 'ai-title' && typeof line.aiTitle === 'string' && line.aiTitle.trim()) {
-                w.detector.title = line.aiTitle.trim();
+            w.detector.title = await findLastAiTitle(s.jsonlPath);
+            if (!w.detector.title) {
+              for (const line of await readHeadLines(s.jsonlPath)) {
+                if (line.type === 'ai-title' && typeof line.aiTitle === 'string' && line.aiTitle.trim()) {
+                  w.detector.title = line.aiTitle.trim();
+                }
               }
             }
             if (w.detector.title) {
-              this.deps.log.info(`title backfilled from head for ${s.sessionId.slice(0, 8)}: ${w.detector.title}`);
+              this.deps.log.info(`title backfilled for ${s.sessionId.slice(0, 8)}: ${w.detector.title}`);
             }
           }
+          w.publishedTitle = w.detector.title;
         } catch (err) {
           this.deps.log.warn(`bootstrap failed for ${s.sessionId.slice(0, 8)}, retrying next event: ${err}`);
           this.watchers.delete(s.sessionId);
@@ -195,6 +202,12 @@ export class SuggestController {
         } else {
           void this.startGeneration(w, event);
         }
+      }
+      // Claude renamed the conversation mid-watch: refresh the stored
+      // suggestion's title so the per-tab lightbulb follows the new label.
+      if (w.detector.title && w.detector.title !== w.publishedTitle) {
+        w.publishedTitle = w.detector.title;
+        this.deps.ui.updateTitle(this, w.sessionId, w.detector.title);
       }
     }
   }

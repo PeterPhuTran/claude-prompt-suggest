@@ -77,6 +77,16 @@ export class StatusBar {
     if (this.suggestions.delete(sessionId)) this.render();
   }
 
+  /** The conversation was re-titled — keep its pending suggestion matchable. */
+  updateTitle(_owner: SuggestionOwner, sessionId: string, title: string): void {
+    const s = this.suggestions.get(sessionId);
+    if (s && s.title !== title) {
+      this.log.info(`title updated for ${sessionId.slice(0, 8)}: ${s.title ?? '(none)'} → ${title}`);
+      s.title = title;
+      this.render();
+    }
+  }
+
   showError(owner: SuggestionOwner, errorKind: 'binary' | 'auth' | 'transient', message: string): void {
     this.owner = owner;
     this.setTransient(

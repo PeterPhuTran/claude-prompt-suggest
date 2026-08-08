@@ -123,6 +123,45 @@ export class TranscriptTailer {
 }
 
 /**
+ * The LATEST conversation title in a transcript. Claude re-titles evolving
+ * conversations (new ai-title lines are appended over time), and the tab
+ * label always shows the newest — so matching must too. Scans the last
+ * maxBytes for the final ai-title line; returns undefined if none in range.
+ */
+export async function findLastAiTitle(filePath: string, maxBytes = 4 * 1024 * 1024): Promise<string | undefined> {
+  const fh = await open(filePath, 'r');
+  try {
+    const size = (await fh.stat()).size;
+    const len = Math.min(size, maxBytes);
+    const start = size - len;
+    const buf = Buffer.allocUnsafe(len);
+    let done = 0;
+    while (done < len) {
+      const { bytesRead } = await fh.read(buf, done, len - done, start + done);
+      if (bytesRead === 0) break;
+      done += bytesRead;
+    }
+    const lines = buf.subarray(0, done).toString('utf8').split('\n');
+    // index 0 may be a partial line when we started mid-file — JSON.parse
+    // rejects it naturally, no special casing needed
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"ai-title"')) continue;
+      try {
+        const obj = JSON.parse(lines[i].trim());
+        if (obj?.type === 'ai-title' && typeof obj.aiTitle === 'string' && obj.aiTitle.trim()) {
+          return obj.aiTitle.trim();
+        }
+      } catch {
+        // partial or corrupt line — keep scanning backwards
+      }
+    }
+    return undefined;
+  } finally {
+    await fh.close();
+  }
+}
+
+/**
  * Parse the first complete lines of a transcript (up to maxBytes from the
  * head). Long sessions keep their one ai-title line near the top, outside the
  * tail bootstrap window — this recovers it cheaply.

@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TranscriptTailer, readHeadLines } from '../src/transcriptTailer';
+import { TranscriptTailer, findLastAiTitle, readHeadLines } from '../src/transcriptTailer';
 import { assistantLine, toJsonl, userLine } from './helpers';
 
 describe('TranscriptTailer', () => {
@@ -108,6 +108,20 @@ describe('TranscriptTailer', () => {
     await tailer.bootstrap();
     expect(await tailer.poll()).toHaveLength(0);
     expect(await tailer.poll()).toHaveLength(0);
+  });
+
+  it('findLastAiTitle returns the newest of several titles (conversations get re-titled)', async () => {
+    const lines = [
+      userLine('start'),
+      { type: 'ai-title', aiTitle: 'Check updates on Comma 3 device', sessionId: 's' },
+      ...Array.from({ length: 200 }, (_, i) => userLine(`mid ${i} ${'z'.repeat(300)}`)),
+      { type: 'ai-title', aiTitle: 'Comma 4 port', sessionId: 's' },
+      assistantLine('done', 'end_turn'),
+    ];
+    await writeFile(file, toJsonl(lines));
+    expect(await findLastAiTitle(file)).toBe('Comma 4 port');
+    // and when scanning a window that starts mid-file, partial first lines are skipped safely
+    expect(await findLastAiTitle(file, 2 * 1024)).toBe('Comma 4 port');
   });
 
   it('readHeadLines recovers the early ai-title of a long transcript', async () => {
